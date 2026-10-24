@@ -33,7 +33,7 @@ agent = Agent(
 chat = Protocol(spec=chat_protocol_spec)
 payments = Protocol(spec=payment_protocol_spec, role="seller")
 
-PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://fetchathon-backend.onrender.com").rstrip("/")
+PUBLIC_URL = "https://fetchathon-backend.onrender.com"
 MIN_JD_CHARS = 80
 MENTION = re.compile(r"@agent1[0-9a-z]+", re.IGNORECASE)
 PREP_PACK_PRICE = os.environ.get("PREP_PACK_PRICE_FET", "0.5")
