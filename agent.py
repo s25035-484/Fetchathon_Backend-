@@ -59,8 +59,7 @@ HELP = (
     "**Paste a job description** (or type `interview` followed by the JD) and Priya, our HR recruiter, "
     "will interview you for that exact role, as a natural back-and-forth conversation that adapts to your answers.\n\n"
     "• Answer right here in chat, **or** open the 🎥 face-to-face room link for a voice + video interview\n"
-    "• Tell Priya whenever you want to wrap up; she decides when the interview is complete → scorecard against every JD requirement\n"
-    "• Type **result** to fetch the scorecard of a video interview"
+    "• Priya decides when the interview is complete, and your scorecard arrives here automatically"
 )
 
 
@@ -71,12 +70,13 @@ def reply(text: str, card: DetailCardPayload | None = None) -> ChatMessage:
     return ChatMessage(timestamp=datetime.now(timezone.utc), msg_id=uuid4(), content=content)
 
 
-def interview_card() -> DetailCardPayload:
+def interview_card(link: str) -> DetailCardPayload:
     return DetailCardPayload(
-        title="Interview in progress",
-        summary_rows=[DetailSummaryRow(label="Interviewer", value="Priya (ASI1)"),
-                      DetailSummaryRow(label="Modes", value="Chat or face-to-face room")],
-        ctas=[CtaAction(label="Wrap up & get scorecard", selection={"action": "wrap_up"}, primary=True)],
+        title="🎥 Face-to-face interview room",
+        summary_rows=[DetailSummaryRow(label="Join (voice + video)", value=link),
+                      DetailSummaryRow(label="Interviewer", value="Priya (ASI1)"),
+                      DetailSummaryRow(label="Scorecard", value="Sent here automatically when Priya finishes")],
+        ctas=[CtaAction(label="Continue in chat", selection={"action": "chat"}, primary=True)],
     )
 
 
@@ -117,7 +117,7 @@ def checkout_card() -> ReviewCardPayload:
     )
 
 
-CARD_ACTIONS = {"wrap_up": "I'd like to wrap up the interview now, please."}
+CARD_ACTIONS: dict[str, str] = {}
 
 
 async def start(ctx: Context, sender: str, jd: str) -> str:
@@ -128,18 +128,16 @@ async def start(ctx: Context, sender: str, jd: str) -> str:
     ctx.storage.set("watch", watch)
     link = f"{PUBLIC_URL}/room/{room['sid']}"
     return (
-        "🎙️ **Interview started.** Priya has read the job description.\n\n"
-        f"🎥 **Face-to-face (voice + video):** {link}\n"
-        "💬 Or simply reply here. Tell Priya whenever you want to wrap up and you'll get your scorecard.\n\n"
-        f"---\n**Priya:** {room['opening']}"
-    ), interview_card()
+        "🎙️ **Interview started.** Answer here, or join the face-to-face room below.\n\n"
+        f"**Priya:** {room['opening']}"
+    ), interview_card(link)
 
 
 async def request_prep_pack(ctx: Context, sender: str, state: dict) -> str:
     if not state.get("sid"):
         return "Finish an interview first. The Prep Pack is built from your answers. " + HELP
     if state.get("active"):
-        return "Your interview is still running. Wrap it up with Priya first, then reply **prep pack**."
+        return "Your interview is still running. The Prep Pack unlocks as soon as Priya completes it."
     reference = f"prep-{state['sid']}"
     order = ctx.storage.get(f"pay:{reference}") or {}
     if order.get("paid"):
@@ -196,7 +194,7 @@ async def handle_text(ctx: Context, sender: str, text: str):
         card = await call("room_result", sid=state["sid"])
         if card:
             return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card()
-        return "Your interview is still running. Tell Priya when you'd like to wrap up."
+        return "Your interview is still running. Your scorecard will arrive here automatically when Priya completes it."
 
     if action == "prep_pack":
         if state.get("sid") and not state.get("active"):
