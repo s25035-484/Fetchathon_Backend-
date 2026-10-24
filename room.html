@@ -206,9 +206,11 @@ function looksLikeEcho(t) {
 }
 
 const ACKS = ["Okay.", "Got it.", "Mm-hmm, right.", "Okay, that makes sense.", "Interesting.", "Alright.", "I see."];
+let queued = "";
 async function send(text) {
   text = text.trim();
-  if (!text || busy || ended) return;
+  if (!text || ended) return;
+  if (busy) { queued = (queued + " " + text).trim(); add("me", text); return; }
   add("me", text); busy = true; setStatus("Priya is thinking…", true);
   const pending = fetch(api("turn"), { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ text }) });
   speak(ACKS[Math.floor(Math.random() * ACKS.length)]);
@@ -216,7 +218,9 @@ async function send(text) {
     const r = await pending;
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.status);
-    add("hr", j.reply); busy = false; await speak(j.reply);
+    busy = false;
+    if (queued && !j.end) { add("hr", j.reply); const more = queued; queued = ""; return send(more); }
+    add("hr", j.reply); await speak(j.reply);
     if (j.end) end(true);
   } catch (e) {
     busy = false; setStatus("Connection issue — try again", false);
@@ -232,14 +236,14 @@ function startRecognition() {
     let interim = "";
     for (let i = ev.resultIndex; i < ev.results.length; i++) {
       const t = ev.results[i][0].transcript;
-      if (ev.results[i].isFinal) { if (!(speaking && looksLikeEcho(t))) buffer += " " + t.trim(); }
+      if (ev.results[i].isFinal) { if (!(speaking && looksLikeEcho(t))) { bargeIn(); buffer += " " + t.trim(); } }
       else interim += t;
     }
     interimText = interim;
     const heard = (buffer + " " + interim).trim();
-    if (speaking && interim.split(/\s+/).filter(Boolean).length >= 2 && !looksLikeEcho(interim)) bargeIn();
-    if (!speaking) live.textContent = heard ? "🗣️ " + heard : "";
-    if (!speaking && !interim && buffer.trim()) { const t = buffer.trim(); buffer = ""; interimText = ""; live.textContent = ""; send(t); }
+    if (speaking && interim.trim() && !looksLikeEcho(interim)) bargeIn();
+    live.textContent = heard ? "🗣️ " + heard : "";
+    if (!interim && buffer.trim()) { const t = buffer.trim(); buffer = ""; interimText = ""; live.textContent = ""; send(t); }
   };
   rec.onstart = () => { if (!speaking) setStatus("Listening…", true); };
   rec.onend = () => { if (micOn && !ended) { try { rec.start(); } catch (_) {} } };
