@@ -171,6 +171,7 @@ async def handle_text(ctx: Context, sender: str, text: str):
     decision = await call("route", text=text, state={
         "interview_active": bool(state.get("active")),
         "has_finished_interview": bool(state.get("sid")) and not state.get("active"),
+        "sid": state.get("sid"),
     })
     action = decision["action"]
 

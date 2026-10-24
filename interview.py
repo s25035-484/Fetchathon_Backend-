@@ -138,13 +138,23 @@ async def prep_pack(sid: str) -> str:
 
 async def route(text: str, state: dict) -> dict:
     """Let ASI1 decide what the user wants, given where they are in the flow."""
+    sid = state.pop("sid", None)
+    if sid and has_room(sid):
+        room = _load(sid)
+        state["current_interview_brief"] = room["jd"][:400]
+        state["last_priya_message"] = room["turns"][-1]["text"][:300] if room["turns"] else ""
+    sid = state.pop("sid", None)
+    if sid and has_room(sid):
+        room = _load(sid)
+        state["current_interview_brief"] = room["jd"][:400]
+        state["last_priya_message"] = room["turns"][-1]["text"][:300] if room["turns"] else ""
     raw = await asi([
         {"role": "system", "content": (
             "You are the brain of InterviewPilot, an ASI:One agent where Priya (an AI HR recruiter) interviews candidates "
             "for a job description, gives a scorecard, and sells an optional Prep Pack. Decide what the user wants from "
             "their message and the current state. Reply with JSON only: "
             '{"action": "start" | "answer" | "wrap_up" | "prep_pack" | "result" | "chat", "brief": "...", "reply": "..."}. '
-            "start: user wants a (new) interview. Put the job description in brief; if they only named a role, subject or "
+            "start: user wants a (new) interview, including when they ask for a different role or topic than the current interview.  Put the job description in brief; if they only named a role, subject or "
             "exam, write a concise brief yourself (role/topic, 5-7 areas to assess, level). "
             "answer: user is responding to Priya during an active interview. "
             "wrap_up: user wants to end the active interview and get the scorecard. "
