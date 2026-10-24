@@ -18,6 +18,7 @@ OPS = {
     "room_end": interview.room_end,
     "room_result": interview.room_result,
     "prep_pack": interview.prep_pack,
+    "route": interview.route,
 }
 
 

@@ -44,7 +44,6 @@ chat = Protocol(spec=chat_protocol_spec)
 payments = Protocol(spec=payment_protocol_spec, role="seller")
 
 PUBLIC_URL = "https://fetchathon-backend.onrender.com"
-MIN_JD_CHARS = 80
 MENTION = re.compile(r"@agent1[0-9a-z]+", re.IGNORECASE)
 PREP_PACK_PRICE = os.environ.get("PREP_PACK_PRICE_FET", "0.5")
 PAYMENT_DEADLINE_SECONDS = 600
@@ -121,10 +120,6 @@ def checkout_card() -> ReviewCardPayload:
 CARD_ACTIONS = {"wrap_up": "I'd like to wrap up the interview now, please."}
 
 
-def is_jd(text: str) -> bool:
-    return len(text.strip()) >= MIN_JD_CHARS
-
-
 async def start(ctx: Context, sender: str, jd: str) -> str:
     room = await call("create_room", jd=jd)
     ctx.storage.set(sender, {"sid": room["sid"], "active": True})
@@ -162,47 +157,52 @@ async def request_prep_pack(ctx: Context, sender: str, state: dict) -> str:
     return f"💳 Payment request sent: **{PREP_PACK_PRICE} FET**. Approve it and your Prep Pack arrives right here."
 
 
-async def handle_text(ctx: Context, sender: str, text: str) -> str:
+async def finish(ctx: Context, sender: str, state: dict, closing: str = ""):
+    if closing:
+        await ctx.send(sender, reply(f"**Priya:** {closing}\n\n🏁 **Interview complete.** ⏳ Writing your scorecard…"))
+    card = await call("room_end", sid=state["sid"])
+    ctx.storage.set(sender, {**state, "active": False})
+    _unwatch(ctx, sender)
+    return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card()
+
+
+async def handle_text(ctx: Context, sender: str, text: str):
     state = ctx.storage.get(sender) or {}
-    low = text.strip().lower()
+    decision = await call("route", text=text, state={
+        "interview_active": bool(state.get("active")),
+        "has_finished_interview": bool(state.get("sid")) and not state.get("active"),
+    })
+    action = decision["action"]
 
-    if low == "result":
-        if not state.get("sid"):
-            return "No interview yet. " + HELP
-        card = await call("room_result", sid=state["sid"])
-        return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card() if card else "Your interview is still running. Tell Priya you'd like to wrap up to get your scorecard."
+    if action == "start":
+        brief = decision["brief"] or text
+        await ctx.send(sender, reply("⏳ Priya is reading the brief and preparing your interview…"))
+        return await start(ctx, sender, brief)
 
-    if low in {"prep pack", "prep-pack", "preppack", "buy prep pack", "unlock prep pack"}:
-        if not state.get("sid") or state.get("active"):
-            return await request_prep_pack(ctx, sender, state)
-        return "Here's your Prep Pack summary. Confirm to pay through the Fetch.ai Payment Protocol.", checkout_card()
-
-    if low.startswith("interview"):
-        jd = text.strip()[len("interview"):].strip(" :-\n")
-        if not is_jd(jd):
-            return ("To run a realistic interview I need the **job description**. Please paste it (a few lines: role, "
-                    "skills, responsibilities), e.g. *Backend Engineer: 2+ years Python, Django, PostgreSQL, AWS...*")
-        return await start(ctx, sender, jd)
-
-    if state.get("active"):
+    if action in {"answer", "wrap_up"} and state.get("active"):
         try:
             turn = await call("room_turn", sid=state["sid"], text=text)
         except BackendError as e:
             if e.status != 404:
                 raise
             ctx.storage.set(sender, {})
-            return await start(ctx, sender, text) if is_jd(text) else HELP
-        if not turn["end"]:
-            return f"**Priya:** {turn['say']}"
-        await ctx.send(sender, reply(f"**Priya:** {turn['say']}\n\n🏁 **Interview complete.** ⏳ Writing your scorecard…"))
-        card = await call("room_end", sid=state["sid"])
-        ctx.storage.set(sender, {**state, "active": False})
-        _unwatch(ctx, sender)
-        return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}"
+            return "That interview has expired. Tell me the role or paste a job description to start a new one.", roles_card()
+        if turn["end"] or action == "wrap_up":
+            return await finish(ctx, sender, state, turn["say"])
+        return f"**Priya:** {turn['say']}"
 
-    if is_jd(text):
-        return await start(ctx, sender, text)
-    return HELP
+    if action == "result" and state.get("sid"):
+        card = await call("room_result", sid=state["sid"])
+        if card:
+            return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card()
+        return "Your interview is still running. Tell Priya when you'd like to wrap up."
+
+    if action == "prep_pack":
+        if state.get("sid") and not state.get("active"):
+            return "Here's your Prep Pack summary. Confirm to pay through the Fetch.ai Payment Protocol.", checkout_card()
+        return await request_prep_pack(ctx, sender, state)
+
+    return decision["reply"] or HELP, roles_card()
 
 
 async def handle_card_action(ctx: Context, sender: str, action: str, selection: dict) -> None:
@@ -250,16 +250,12 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                 await ctx.send(sender, reply(HELP, roles_card()))
         elif isinstance(item, TextContent):
             text_in = MENTION.sub("", item.text).strip()
-            state = ctx.storage.get(sender) or {}
-            if not state.get("active") and is_jd(text_in.removeprefix("interview")):
-                await ctx.send(sender, reply("⏳ Priya is reading the job description and preparing your interview…"))
             try:
                 text = await handle_text(ctx, sender, text_in)
                 card = None
                 if isinstance(text, tuple):
                     text, card = text
-                elif text == HELP:
-                    card = roles_card()
+
             except BackendError as e:
                 ctx.logger.error(str(e))
                 text, card = "⚠️ The interview service is busy right now. Please send your message again in a moment.", None
