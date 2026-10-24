@@ -16,6 +16,7 @@ OPS = {
     "room_turn": interview.room_turn,
     "room_end": interview.room_end,
     "room_result": interview.room_result,
+    "prep_pack": interview.prep_pack,
 }
 
 
@@ -42,7 +43,7 @@ async def handle(request: web.Request) -> web.Response:
 
 def _room(request: web.Request) -> str:
     sid = request.match_info["sid"]
-    if sid not in interview.ROOMS:
+    if not interview.has_room(sid):
         raise web.HTTPNotFound(text="Interview not found or expired.")
     return sid
 
