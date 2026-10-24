@@ -24,7 +24,7 @@ agent = Agent(
 )
 chat = Protocol(spec=chat_protocol_spec)
 
-PUBLIC_URL = os.environ.get("PUBLIC_URL", os.environ.get("BACKEND_URL", "")).rstrip("/")
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://fetchathon-backend.onrender.com").rstrip("/")
 MIN_JD_CHARS = 80
 
 HELP = (
