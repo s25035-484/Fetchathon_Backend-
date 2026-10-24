@@ -69,8 +69,8 @@ async def room_turn(request: web.Request) -> web.Response:
         return web.json_response({"error": type(e).__name__}, status=502)
 
 
-async def notify_agent(sid: str) -> None:
-    url = f"http://127.0.0.1:{os.environ.get('AGENT_PORT', '8001')}/room-done"
+async def notify_agent(sid: str, event: str = "room-done") -> None:
+    url = f"http://127.0.0.1:{os.environ.get('AGENT_PORT', '8001')}/{event}"
     try:
         async with ClientSession(timeout=ClientTimeout(total=30)) as session:
             await session.post(url, json={"sid": sid, "token": TOKEN})
@@ -88,6 +88,13 @@ async def room_end(request: web.Request) -> web.Response:
         return web.json_response({"error": type(e).__name__}, status=502)
 
 
+async def room_left(request: web.Request) -> web.Response:
+    sid = _room(request)
+    if interview.room_result(sid) is None:
+        asyncio.create_task(notify_agent(sid, "room-left"))
+    return web.json_response({"ok": True})
+
+
 async def health(_: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
@@ -100,6 +107,7 @@ app.add_routes([
     web.get("/room/{sid}/state", room_state),
     web.post("/room/{sid}/turn", room_turn),
     web.post("/room/{sid}/end", room_end),
+    web.post("/room/{sid}/left", room_left),
 ])
 
 if __name__ == "__main__":

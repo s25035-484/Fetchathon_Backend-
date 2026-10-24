@@ -270,7 +270,9 @@ async function end(byPriya) {
   } catch (_) { setStatus("Interview ended. Your scorecard will appear in your ASI:One chat", false); }
 }
 
-$("go").onclick = join;
+let joined = false;
+window.addEventListener("pagehide", () => { if (joined && !ended) navigator.sendBeacon(api("left")); });
+$("go").onclick = () => { joined = true; join(); };
 $("end").onclick = () => end(false);
 $("send").onclick = () => { const t = $("text").value; $("text").value = ""; bargeIn(); send(t); };
 $("text").addEventListener("keydown", (e) => { if (e.key === "Enter") $("send").click(); });

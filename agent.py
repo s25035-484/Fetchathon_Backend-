@@ -305,6 +305,20 @@ async def on_room_done(ctx: Context, req: RoomDone) -> RoomDoneAck:
     return RoomDoneAck(delivered=True)
 
 
+@agent.on_rest_post("/room-left", RoomDone, RoomDoneAck)
+async def on_room_left(ctx: Context, req: RoomDone) -> RoomDoneAck:
+    if not hmac.compare_digest(req.token, os.environ.get("BACKEND_TOKEN", "")):
+        return RoomDoneAck(delivered=False)
+    watch = ctx.storage.get("watch") or {}
+    sender = next((s for s, sid in watch.items() if sid == req.sid), None)
+    if sender is None:
+        return RoomDoneAck(delivered=False)
+    link = f"{PUBLIC_URL}/room/{req.sid}"
+    await ctx.send(sender, reply("👋 You left the interview room. Your progress is saved, so join again to continue, "
+                                 "or keep answering here.", interview_card(link)))
+    return RoomDoneAck(delivered=True)
+
+
 @payments.on_message(CommitPayment)
 async def on_commit(ctx: Context, sender: str, msg: CommitPayment):
     order = ctx.storage.get(f"pay:{msg.reference}") if msg.reference else None
