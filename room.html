@@ -205,12 +205,15 @@ function looksLikeEcho(t) {
   return hits / words.length > 0.7;
 }
 
+const ACKS = ["Okay.", "Got it.", "Mm-hmm, right.", "Okay, that makes sense.", "Interesting.", "Alright.", "I see."];
 async function send(text) {
   text = text.trim();
   if (!text || busy || ended) return;
   add("me", text); busy = true; setStatus("Priya is thinking…", true);
+  const pending = fetch(api("turn"), { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ text }) });
+  speak(ACKS[Math.floor(Math.random() * ACKS.length)]);
   try {
-    const r = await fetch(api("turn"), { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ text }) });
+    const r = await pending;
     const j = await r.json();
     if (!r.ok) throw new Error(j.error || r.status);
     add("hr", j.reply); busy = false; await speak(j.reply);
