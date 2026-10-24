@@ -108,7 +108,7 @@
     </div>
     <div class="row">
       <button id="mic" class="secondary">🎤 Mic on</button>
-      <button id="end" class="danger" style="flex:1">End interview &amp; get scorecard</button>
+      <button id="end" class="danger" style="flex:1">End interview</button>
     </div>
   </section>
 </main>
@@ -227,16 +227,15 @@ async function join() {
 async function end(byPriya) {
   if (ended) return;
   ended = true; micOn = false; try { rec && rec.stop(); } catch (_) {}
-  speechSynthesis.cancel(); mouthAnim(false); mode(""); setStatus("Preparing your scorecard…", true);
+  speechSynthesis.cancel(); mouthAnim(false); mode(""); setStatus("Ending interview…", true);
   ["send", "mic", "end"].forEach(id => $(id).disabled = true);
-  if (byPriya !== true) await speak("Thank you so much for your time today. I'm putting together your feedback now.");
+  if (byPriya !== true) await speak("Thank you so much for your time today. Your feedback will be in your chat shortly.");
   try {
-    const j = await (await fetch(api("end"), { method:"POST" })).json();
-    const box = document.createElement("div"); box.id = "card";
-    box.innerHTML = "<h3>📋 Your scorecard</h3>"; box.appendChild(document.createTextNode(j.scorecard || "Scorecard unavailable — please try again."));
-    log.appendChild(box); log.scrollTop = log.scrollHeight;
-    setStatus("Done — back in ASI:One, type “result”", false);
-  } catch (_) { setStatus("Couldn't fetch scorecard — type “result” in ASI:One", false); }
+    const r = await fetch(api("end"), { method:"POST" });
+    if (!r.ok) throw new Error(r.status);
+    add("hr", "Interview ended. Your scorecard has been sent to your ASI:One chat.");
+    setStatus("Interview ended. Check your ASI:One chat", false);
+  } catch (_) { setStatus("Interview ended. Your scorecard will appear in your ASI:One chat", false); }
 }
 
 $("go").onclick = join;
