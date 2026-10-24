@@ -194,7 +194,8 @@ async def handle_text(ctx: Context, sender: str, text: str):
         card = await call("room_result", sid=state["sid"])
         if card:
             return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card()
-        return "Your interview is still running. Your scorecard will arrive here automatically when Priya completes it."
+        return ("Your interview is still running. Go back to the interview, keep answering, or press **End interview** in the "
+                "face-to-face room to finish. Your scorecard arrives here the moment it ends.")
 
     if action == "prep_pack":
         if state.get("sid") and not state.get("active"):
