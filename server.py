@@ -1,8 +1,9 @@
+import asyncio
 import hmac
 import os
 from pathlib import Path
 
-from aiohttp import web
+from aiohttp import ClientSession, ClientTimeout, web
 from dotenv import find_dotenv, load_dotenv
 
 load_dotenv(find_dotenv(usecwd=True))
@@ -67,10 +68,21 @@ async def room_turn(request: web.Request) -> web.Response:
         return web.json_response({"error": type(e).__name__}, status=502)
 
 
+async def notify_agent(sid: str) -> None:
+    url = f"http://127.0.0.1:{os.environ.get('AGENT_PORT', '8001')}/room-done"
+    try:
+        async with ClientSession(timeout=ClientTimeout(total=30)) as session:
+            await session.post(url, json={"sid": sid, "token": TOKEN})
+    except Exception:  # noqa: BLE001 - the room page already shows the scorecard
+        pass
+
+
 async def room_end(request: web.Request) -> web.Response:
     sid = _room(request)
     try:
-        return web.json_response({"scorecard": await interview.room_end(sid)})
+        card = await interview.room_end(sid)
+        asyncio.create_task(notify_agent(sid))
+        return web.json_response({"scorecard": card})
     except Exception as e:  # noqa: BLE001
         return web.json_response({"error": type(e).__name__}, status=502)
 

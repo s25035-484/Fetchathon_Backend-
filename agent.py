@@ -1,10 +1,13 @@
 import asyncio
 import os
+import re
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from dotenv import find_dotenv, load_dotenv
-from uagents import Agent, Context, Protocol
+import hmac
+
+from uagents import Agent, Context, Model, Protocol
 from uagents_core.contrib.protocols.chat import (
     ChatAcknowledgement, ChatMessage, EndSessionContent, StartSessionContent,
     TextContent, chat_protocol_spec,
@@ -32,6 +35,7 @@ payments = Protocol(spec=payment_protocol_spec, role="seller")
 
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://fetchathon-backend.onrender.com").rstrip("/")
 MIN_JD_CHARS = 80
+MENTION = re.compile(r"@agent1[0-9a-z]+", re.IGNORECASE)
 PREP_PACK_PRICE = os.environ.get("PREP_PACK_PRICE_FET", "0.5")
 PAYMENT_DEADLINE_SECONDS = 600
 
@@ -112,7 +116,8 @@ async def handle_text(ctx: Context, sender: str, text: str) -> str:
     if low.startswith("interview"):
         jd = text.strip()[len("interview"):].strip(" :-\n")
         if not is_jd(jd):
-            return "Please paste the full job description after `interview` (a few lines at least)."
+            return ("To run a realistic interview I need the **job description**. Please paste it (a few lines: role, "
+                    "skills, responsibilities), e.g. *Backend Engineer: 2+ years Python, Django, PostgreSQL, AWS...*")
         return await start(ctx, sender, jd)
 
     if state.get("active"):
@@ -144,11 +149,12 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
         if isinstance(item, StartSessionContent):
             ctx.logger.info(f"session start {sender}")
         elif isinstance(item, TextContent):
+            text_in = MENTION.sub("", item.text).strip()
             state = ctx.storage.get(sender) or {}
-            if not state.get("active") and is_jd(item.text.strip().removeprefix("interview")):
+            if not state.get("active") and is_jd(text_in.removeprefix("interview")):
                 await ctx.send(sender, reply("⏳ Priya is reading the job description and preparing your interview…"))
             try:
-                text = await handle_text(ctx, sender, item.text)
+                text = await handle_text(ctx, sender, text_in)
             except BackendError as e:
                 ctx.logger.error(str(e))
                 text = "⚠️ The interview service is busy right now. Please send your message again in a moment."
@@ -171,24 +177,31 @@ def _unwatch(ctx: Context, sender: str) -> None:
         ctx.storage.set("watch", watch)
 
 
-@agent.on_interval(period=20.0)
-async def deliver_room_scorecards(ctx: Context):
+class RoomDone(Model):
+    sid: str
+    token: str
+
+
+class RoomDoneAck(Model):
+    delivered: bool
+
+
+@agent.on_rest_post("/room-done", RoomDone, RoomDoneAck)
+async def on_room_done(ctx: Context, req: RoomDone) -> RoomDoneAck:
+    if not hmac.compare_digest(req.token, os.environ.get("BACKEND_TOKEN", "")):
+        return RoomDoneAck(delivered=False)
     watch = ctx.storage.get("watch") or {}
-    for sender, sid in list(watch.items()):
-        state = ctx.storage.get(sender) or {}
-        if state.get("sid") != sid or not state.get("active"):
-            _unwatch(ctx, sender)
-            continue
-        try:
-            card = await call("room_result", sid=sid)
-        except BackendError as e:
-            if e.status == 404:
-                _unwatch(ctx, sender)
-            continue
-        if card:
-            ctx.storage.set(sender, {**state, "active": False})
-            _unwatch(ctx, sender)
-            await ctx.send(sender, reply(f"🏁 **Your face-to-face interview is complete.**\n\n📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}"))
+    sender = next((s for s, sid in watch.items() if sid == req.sid), None)
+    if sender is None:
+        return RoomDoneAck(delivered=False)
+    state = ctx.storage.get(sender) or {}
+    _unwatch(ctx, sender)
+    if state.get("sid") != req.sid or not state.get("active"):
+        return RoomDoneAck(delivered=False)
+    card = await call("room_result", sid=req.sid)
+    ctx.storage.set(sender, {**state, "active": False})
+    await ctx.send(sender, reply(f"🏁 **Your face-to-face interview is complete.**\n\n📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}"))
+    return RoomDoneAck(delivered=True)
 
 
 @payments.on_message(CommitPayment)
