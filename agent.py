@@ -12,6 +12,10 @@ from uagents_core.contrib.protocols.chat import (
     ChatAcknowledgement, ChatMessage, EndSessionContent, StartSessionContent,
     TextContent, chat_protocol_spec,
 )
+from uagents_core.contrib.protocols.chat import MetadataContent
+from uagents_core.contrib.protocols.chat.cards import (
+    CtaAction, DetailCardPayload, DetailSummaryRow, create_card_content, extract_card_response,
+)
 from uagents_core.contrib.protocols.payment import (
     CancelPayment, CommitPayment, CompletePayment, Funds, RejectPayment,
     RequestPayment, payment_protocol_spec,
@@ -55,8 +59,32 @@ HELP = (
 )
 
 
-def reply(text: str) -> ChatMessage:
-    return ChatMessage(timestamp=datetime.now(timezone.utc), msg_id=uuid4(), content=[TextContent(text=text)])
+def reply(text: str, card: DetailCardPayload | None = None) -> ChatMessage:
+    content = [TextContent(text=text)]
+    if card is not None:
+        content.append(create_card_content(card, card_id=uuid4()))
+    return ChatMessage(timestamp=datetime.now(timezone.utc), msg_id=uuid4(), content=content)
+
+
+def interview_card() -> DetailCardPayload:
+    return DetailCardPayload(
+        title="Interview in progress",
+        summary_rows=[DetailSummaryRow(label="Interviewer", value="Priya (ASI1)"),
+                      DetailSummaryRow(label="Modes", value="Chat or face-to-face room")],
+        ctas=[CtaAction(label="Wrap up & get scorecard", selection={"action": "wrap_up"}, primary=True)],
+    )
+
+
+def scorecard_card() -> DetailCardPayload:
+    return DetailCardPayload(
+        title="What next?",
+        summary_rows=[DetailSummaryRow(label="Prep Pack", value=f"{PREP_PACK_PRICE} FET via Payment Protocol")],
+        ctas=[CtaAction(label=f"Get Prep Pack ({PREP_PACK_PRICE} FET)", selection={"action": "prep_pack"}, primary=True),
+              CtaAction(label="New interview", selection={"action": "new"})],
+    )
+
+
+CARD_ACTIONS = {"wrap_up": "I'd like to wrap up the interview now, please.", "prep_pack": "prep pack"}
 
 
 def is_jd(text: str) -> bool:
@@ -75,7 +103,7 @@ async def start(ctx: Context, sender: str, jd: str) -> str:
         f"🎥 **Face-to-face (voice + video):** {link}\n"
         "💬 Or simply reply here. Tell Priya whenever you want to wrap up and you'll get your scorecard.\n\n"
         f"---\n**Priya:** {room['opening']}"
-    )
+    ), interview_card()
 
 
 async def request_prep_pack(ctx: Context, sender: str, state: dict) -> str:
@@ -108,7 +136,7 @@ async def handle_text(ctx: Context, sender: str, text: str) -> str:
         if not state.get("sid"):
             return "No interview yet. " + HELP
         card = await call("room_result", sid=state["sid"])
-        return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}" if card else "Your interview is still running. Tell Priya you'd like to wrap up to get your scorecard."
+        return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card() if card else "Your interview is still running. Tell Priya you'd like to wrap up to get your scorecard."
 
     if low in {"prep pack", "prep-pack", "preppack", "buy prep pack", "unlock prep pack"}:
         return await request_prep_pack(ctx, sender, state)
@@ -146,6 +174,16 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     await ctx.send(sender, ChatAcknowledgement(
         timestamp=datetime.now(timezone.utc), acknowledged_msg_id=msg.msg_id))
     for item in msg.content:
+        if isinstance(item, MetadataContent):
+            response = extract_card_response(item)
+            action = (response.selection or {}).get("action") if response and response.selection else None
+            if action == "new":
+                ctx.storage.set(sender, {})
+                await ctx.send(sender, reply("Paste the next job description and Priya will start a fresh interview."))
+                continue
+            if action not in CARD_ACTIONS:
+                continue
+            item = TextContent(text=CARD_ACTIONS[action])
         if isinstance(item, StartSessionContent):
             ctx.logger.info(f"session start {sender}")
         elif isinstance(item, TextContent):
@@ -155,13 +193,16 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                 await ctx.send(sender, reply("⏳ Priya is reading the job description and preparing your interview…"))
             try:
                 text = await handle_text(ctx, sender, text_in)
+                card = None
+                if isinstance(text, tuple):
+                    text, card = text
             except BackendError as e:
                 ctx.logger.error(str(e))
-                text = "⚠️ The interview service is busy right now. Please send your message again in a moment."
+                text, card = "⚠️ The interview service is busy right now. Please send your message again in a moment.", None
             except Exception:  # noqa: BLE001
                 ctx.logger.exception("handler failed")
-                text = "⚠️ Something went wrong on my side. Please try again."
-            await ctx.send(sender, reply(text))
+                text, card = "⚠️ Something went wrong on my side. Please try again.", None
+            await ctx.send(sender, reply(text, card))
         elif isinstance(item, EndSessionContent):
             ctx.logger.info(f"session end {sender}")
 
@@ -200,7 +241,7 @@ async def on_room_done(ctx: Context, req: RoomDone) -> RoomDoneAck:
         return RoomDoneAck(delivered=False)
     card = await call("room_result", sid=req.sid)
     ctx.storage.set(sender, {**state, "active": False})
-    await ctx.send(sender, reply(f"🏁 **Your face-to-face interview is complete.**\n\n📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}"))
+    await ctx.send(sender, reply(f"🏁 **Your face-to-face interview is complete.**\n\n📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card()))
     return RoomDoneAck(delivered=True)
 
 
