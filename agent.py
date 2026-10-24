@@ -82,6 +82,7 @@ async def request_prep_pack(ctx: Context, sender: str, state: dict) -> str:
     reference = f"prep-{state['sid']}"
     order = ctx.storage.get(f"pay:{reference}") or {}
     if order.get("paid"):
+        await ctx.send(sender, reply("⏳ Preparing your Prep Pack…"))
         pack = await call("prep_pack", sid=state["sid"])
         return f"💎 **Your Prep Pack**\n\n{pack}"
     ctx.storage.set(f"pay:{reference}", {"sender": sender, "sid": state["sid"]})
@@ -124,9 +125,11 @@ async def handle_text(ctx: Context, sender: str, text: str) -> str:
             return await start(ctx, sender, text) if is_jd(text) else HELP
         if not turn["end"]:
             return f"**Priya:** {turn['say']}"
+        await ctx.send(sender, reply(f"**Priya:** {turn['say']}\n\n🏁 **Interview complete.** ⏳ Writing your scorecard…"))
         card = await call("room_end", sid=state["sid"])
         ctx.storage.set(sender, {**state, "active": False})
-        return f"**Priya:** {turn['say']}\n\n🏁 **Interview complete.**\n\n📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}"
+        _unwatch(ctx, sender)
+        return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}"
 
     if is_jd(text):
         return await start(ctx, sender, text)
@@ -199,12 +202,13 @@ async def on_commit(ctx: Context, sender: str, msg: CommitPayment):
         return
     ctx.storage.set(f"pay:{msg.reference}", {**order, "paid": True, "tx": msg.transaction_id})
     await ctx.send(sender, CompletePayment(transaction_id=msg.transaction_id))
+    await ctx.send(sender, reply("✅ Payment received. ⏳ Preparing your Prep Pack…"))
     try:
         pack = await call("prep_pack", sid=order["sid"])
-        text = f"✅ Payment received. Thank you!\n\n💎 **Your Prep Pack**\n\n{pack}"
+        text = f"💎 **Your Prep Pack**\n\n{pack}"
     except BackendError as e:
         ctx.logger.error(str(e))
-        text = "✅ Payment received. Your Prep Pack is taking longer than usual. Reply **prep pack** in a moment to receive it."
+        text = "Your Prep Pack is taking longer than usual. You've already paid, so reply **prep pack** in a moment to receive it at no extra charge."
         ctx.storage.set(f"pay:{msg.reference}", {**order, "paid": True, "tx": msg.transaction_id, "delivered": False})
     await ctx.send(sender, reply(text))
 
