@@ -13,7 +13,7 @@
   .pill { font-size:13px; padding:5px 11px; border-radius:99px; background:#262b45; color:var(--muted); }
   .pill.live { background:rgba(62,207,142,.15); color:var(--ok); }
   main { display:grid; grid-template-columns: 1.3fr 1fr; gap:18px; padding:18px 22px; height:calc(100vh - 58px); }
-  .stage { position:relative; background:radial-gradient(circle at 50% 35%, #2a3160, #141830 70%); border-radius:18px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .stage { position:relative; background:radial-gradient(ellipse at 50% 110%, #3a2f52 0%, transparent 60%), linear-gradient(180deg,#1d2445 0%,#2b3466 55%,#1a1f3a 100%); border-radius:18px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
   .stage .name { position:absolute; left:16px; bottom:14px; background:rgba(0,0,0,.45); padding:6px 12px; border-radius:10px; font-size:14px; }
   #me { position:absolute; right:14px; bottom:14px; width:200px; aspect-ratio:4/3; object-fit:cover; border-radius:12px; border:2px solid #2f3660; background:#000; transform:scaleX(-1); }
   #avatar { width:min(70%, 420px); height:auto; }
@@ -33,6 +33,23 @@
   #start p { color:var(--muted); max-width:420px; margin:0; }
   #card { white-space:pre-wrap; }
   /* avatar animation */
+  .stage::before { content:""; position:absolute; inset:8% 12% auto auto; width:38%; height:46%; border-radius:12px;
+    background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.02)); box-shadow:inset 0 0 0 2px rgba(255,255,255,.05); filter:blur(1px); }
+  .stage::after { content:""; position:absolute; left:50%; top:50%; width:58%; aspect-ratio:1; transform:translate(-50%,-55%);
+    border-radius:50%; background:radial-gradient(circle, rgba(108,124,255,.0) 55%, rgba(108,124,255,.35) 70%, transparent 72%);
+    opacity:0; transition:opacity .4s; pointer-events:none; }
+  .talking::after { opacity:1; animation:pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{transform:translate(-50%,-55%) scale(1)} 50%{transform:translate(-50%,-55%) scale(1.04)} }
+  #avatar { filter:drop-shadow(0 18px 30px rgba(0,0,0,.45)); position:relative; z-index:1; }
+  #bodyg { transform-origin:200px 520px; animation:breathe 4.2s ease-in-out infinite; }
+  @keyframes breathe { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.012) translateY(-1px)} }
+  #idle { transform-origin:200px 330px; animation:sway 7s ease-in-out infinite; }
+  @keyframes sway { 0%,100%{transform:rotate(0)} 30%{transform:rotate(1.2deg)} 70%{transform:rotate(-1deg) translateY(1px)} }
+  #brows { transition:transform .25s ease; }
+  .talking #brows { animation:brow 2.2s ease-in-out infinite; }
+  @keyframes brow { 0%,100%{transform:translateY(0)} 20%{transform:translateY(-3px)} 45%{transform:translateY(0)} 75%{transform:translateY(-2px)} }
+  .earring { transform-box:fill-box; transform-origin:50% 0; animation:swing 3s ease-in-out infinite; }
+  @keyframes swing { 0%,100%{transform:rotate(6deg)} 50%{transform:rotate(-6deg)} }
   #head { transform-origin:200px 330px; transition:transform .5s ease; }
   .talking #head { animation:talk 2.6s ease-in-out infinite; }
   .listening #head { animation:nod 3.2s ease-in-out infinite; }
@@ -59,26 +76,39 @@
         <linearGradient id="hair" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2b1a14"/><stop offset="1" stop-color="#1a0f0b"/></linearGradient>
         <linearGradient id="blazer" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34407a"/><stop offset="1" stop-color="#252e5c"/></linearGradient>
       </defs>
+      <g id="bodyg">
       <path d="M60 520 C70 420 120 380 200 372 C280 380 330 420 340 520 Z" fill="url(#blazer)"/>
+      <path d="M150 384 L200 470 L178 384 Z M250 384 L200 470 L222 384 Z" fill="#1d2550" opacity=".55"/>
       <path d="M165 378 L200 450 L235 378 Z" fill="#f4f1ec"/>
       <rect x="178" y="320" width="44" height="62" rx="18" fill="url(#skin)"/>
+      <path d="M176 372 Q200 398 224 372" stroke="#e9c46a" stroke-width="2" fill="none"/>
+      <circle cx="200" cy="396" r="4" fill="#e9c46a"/>
+      </g>
       <g id="hand">
         <path d="M300 520 C300 485 296 462 286 446 C280 436 292 428 302 436 C316 448 322 470 324 520 Z" fill="url(#skin)"/>
       </g>
-      <g id="head">
+      <g id="idle"><g id="head">
         <path d="M102 210 C96 120 150 70 205 72 C268 74 312 126 302 220 C300 280 316 330 300 360 C270 340 262 300 262 300 L140 300 C140 300 132 342 100 362 C86 330 104 280 102 210 Z" fill="url(#hair)"/>
         <ellipse cx="200" cy="205" rx="80" ry="102" fill="url(#skin)"/>
         <ellipse cx="121" cy="212" rx="12" ry="20" fill="#d49c76"/>
         <ellipse cx="279" cy="212" rx="12" ry="20" fill="#d49c76"/>
-        <circle cx="121" cy="236" r="4" fill="#e9c46a"/>
-        <circle cx="279" cy="236" r="4" fill="#e9c46a"/>
+        <g class="earring"><circle cx="121" cy="236" r="4" fill="#e9c46a"/><circle cx="121" cy="246" r="3" fill="#f2d48a"/></g>
+        <g class="earring"><circle cx="279" cy="236" r="4" fill="#e9c46a"/><circle cx="279" cy="246" r="3" fill="#f2d48a"/></g>
         <path d="M120 170 C130 104 180 92 214 100 C252 108 276 134 282 170 C258 140 226 126 196 128 C162 130 136 146 120 170 Z" fill="url(#hair)"/>
+        <path d="M150 112 C178 98 230 100 262 124" stroke="#5a3a2c" stroke-width="5" fill="none" opacity=".45" stroke-linecap="round"/>
+        <g id="brows">
         <path d="M150 176 Q168 166 186 174" stroke="#2b1a14" stroke-width="4.5" fill="none" stroke-linecap="round"/>
         <path d="M214 174 Q232 166 250 176" stroke="#2b1a14" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        </g>
         <ellipse cx="168" cy="198" rx="12" ry="8" fill="#fff"/>
         <ellipse cx="232" cy="198" rx="12" ry="8" fill="#fff"/>
+        <g id="eyes">
         <circle id="pl" cx="168" cy="198" r="5.5" fill="#3a2418"/>
         <circle id="pr" cx="232" cy="198" r="5.5" fill="#3a2418"/>
+        <circle cx="170" cy="196" r="1.6" fill="#fff"/><circle cx="234" cy="196" r="1.6" fill="#fff"/>
+        </g>
+        <path d="M155 192 Q168 186 181 192" stroke="#2b1a14" stroke-width="2" fill="none"/>
+        <path d="M219 192 Q232 186 245 192" stroke="#2b1a14" stroke-width="2" fill="none"/>
         <g id="lids" fill="#d49c76">
           <rect x="154" y="188" width="28" height="18" rx="8"/>
           <rect x="218" y="188" width="28" height="18" rx="8"/>
@@ -87,9 +117,9 @@
         <ellipse cx="150" cy="238" rx="13" ry="7" fill="#e79a8a" opacity=".35"/>
         <ellipse cx="250" cy="238" rx="13" ry="7" fill="#e79a8a" opacity=".35"/>
         <g transform="translate(200 266)">
-          <path id="mouth" d="M-24 0 Q0 6 24 0 Q0 8 -24 0 Z" fill="#a8424a"/>
+          <path id="mouth" d="M-22 -1 Q0 9 22 -1 Q0 12 -22 -1 Z" fill="#a8424a"/>
         </g>
-      </g>
+      </g></g>
     </svg>
     <div class="name">Priya · Senior HR Recruiter</div>
     <video id="me" autoplay muted playsinline></video>
@@ -140,11 +170,12 @@ function pickVoice() {
 }
 speechSynthesis.onvoiceschanged = pickVoice; pickVoice();
 
-const OPEN = ["M-24 0 Q0 6 24 0 Q0 8 -24 0 Z", "M-22 -2 Q0 4 22 -2 Q0 16 -22 -2 Z", "M-20 -3 Q0 2 20 -3 Q0 22 -20 -3 Z", "M-16 -2 Q0 1 16 -2 Q0 14 -16 -2 Z"];
+const SMILE = "M-22 -1 Q0 9 22 -1 Q0 12 -22 -1 Z";
+const OPEN = [SMILE, "M-22 -2 Q0 4 22 -2 Q0 16 -22 -2 Z", "M-20 -3 Q0 2 20 -3 Q0 22 -20 -3 Z", "M-16 -2 Q0 1 16 -2 Q0 14 -16 -2 Z"];
 let mouthTimer = null;
 function mouthAnim(on) {
   clearInterval(mouthTimer);
-  if (!on) { mouth.setAttribute("d", OPEN[0]); return; }
+  if (!on) { mouth.setAttribute("d", SMILE); return; }
   mouthTimer = setInterval(() => mouth.setAttribute("d", OPEN[1 + Math.floor(Math.random() * 3)]), 110);
 }
 function mode(m) { stage.classList.toggle("talking", m === "talk"); stage.classList.toggle("listening", m === "listen"); }
@@ -156,6 +187,7 @@ function speak(text) {
     if (voice) u.voice = voice;
     u.rate = 1.0; u.pitch = 1.08;
     currentUtterance = text.toLowerCase();
+    u.onboundary = () => mouth.setAttribute("d", OPEN[1 + Math.floor(Math.random() * 3)]);
     u.onstart = () => { speaking = true; mode("talk"); mouthAnim(true); setStatus("Priya is speaking", true); };
     const done = () => { speaking = false; mouthAnim(false); mode("listen"); setStatus("Listening…", true); resolve(); };
     u.onend = done; u.onerror = done;
@@ -246,7 +278,17 @@ $("mic").onclick = () => {
   micOn = !micOn; $("mic").textContent = micOn ? "🎤 Mic on" : "🔇 Mic off";
   if (micOn) { try { rec && rec.start(); } catch (_) {} } else { try { rec && rec.stop(); } catch (_) {} }
 };
-setInterval(() => { stage.classList.add("blink"); setTimeout(() => stage.classList.remove("blink"), 140); }, 3800);
+function blink() {
+  stage.classList.add("blink"); setTimeout(() => stage.classList.remove("blink"), 130);
+  if (Math.random() < .2) setTimeout(() => { stage.classList.add("blink"); setTimeout(() => stage.classList.remove("blink"), 120); }, 260);
+  setTimeout(blink, 2200 + Math.random() * 3800);
+}
+setTimeout(blink, 1500);
+setInterval(() => {
+  if (speaking) return;
+  const dx = (Math.random() - .5) * 5, dy = (Math.random() - .5) * 2.5;
+  $("eyes").setAttribute("transform", `translate(${dx} ${dy})`);
+}, 1800);
 document.addEventListener("mousemove", (e) => {
   const dx = (e.clientX / innerWidth - .5) * 4, dy = (e.clientY / innerHeight - .5) * 3;
   $("pl").setAttribute("cx", 168 + dx); $("pr").setAttribute("cx", 232 + dx);
