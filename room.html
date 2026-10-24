@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>InterviewPilot — Live Interview</title>
+<style>
+  :root { --bg:#0f1220; --panel:#181c2f; --text:#e8eaf6; --muted:#9aa0c0; --accent:#6c7cff; --ok:#3ecf8e; --warn:#ff7a6c; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+  header { display:flex; align-items:center; justify-content:space-between; padding:14px 22px; border-bottom:1px solid #262b45; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  .pill { font-size:13px; padding:5px 11px; border-radius:99px; background:#262b45; color:var(--muted); }
+  .pill.live { background:rgba(62,207,142,.15); color:var(--ok); }
+  main { display:grid; grid-template-columns: 1.3fr 1fr; gap:18px; padding:18px 22px; height:calc(100vh - 58px); }
+  .stage { position:relative; background:radial-gradient(circle at 50% 35%, #2a3160, #141830 70%); border-radius:18px; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .stage .name { position:absolute; left:16px; bottom:14px; background:rgba(0,0,0,.45); padding:6px 12px; border-radius:10px; font-size:14px; }
+  #me { position:absolute; right:14px; bottom:14px; width:200px; aspect-ratio:4/3; object-fit:cover; border-radius:12px; border:2px solid #2f3660; background:#000; transform:scaleX(-1); }
+  #avatar { width:min(70%, 420px); height:auto; }
+  .side { display:flex; flex-direction:column; gap:12px; min-height:0; }
+  #log { flex:1; overflow:auto; background:var(--panel); border-radius:14px; padding:14px; font-size:15px; line-height:1.45; }
+  .msg { margin:0 0 12px; }
+  .msg b { color:var(--accent); font-weight:600; }
+  .msg.me b { color:var(--ok); }
+  #live { color:var(--muted); font-style:italic; min-height:22px; font-size:14px; }
+  .row { display:flex; gap:8px; }
+  input { flex:1; background:var(--panel); border:1px solid #2f3660; color:var(--text); padding:11px 12px; border-radius:10px; font-size:15px; }
+  button { background:var(--accent); color:#fff; border:0; padding:11px 16px; border-radius:10px; font-size:15px; cursor:pointer; }
+  button.secondary { background:#2f3660; }
+  button.danger { background:var(--warn); }
+  button:disabled { opacity:.5; cursor:default; }
+  #start { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(15,18,32,.88); z-index:5; text-align:center; padding:20px; }
+  #start p { color:var(--muted); max-width:420px; margin:0; }
+  #card { white-space:pre-wrap; }
+  /* avatar animation */
+  #head { transform-origin:200px 330px; transition:transform .5s ease; }
+  .talking #head { animation:talk 2.6s ease-in-out infinite; }
+  .listening #head { animation:nod 3.2s ease-in-out infinite; }
+  @keyframes talk { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-2deg) translateY(-2px)} 60%{transform:rotate(1.8deg)} }
+  @keyframes nod { 0%,100%{transform:rotate(0)} 40%{transform:rotate(0) translateY(3px)} 50%{transform:translateY(0)} }
+  #lids { transform-origin:200px 196px; transform:scaleY(0); }
+  .blink #lids { transform:scaleY(1); }
+  #hand { transform-origin:300px 470px; transition:transform .6s ease; }
+  .talking #hand { animation:gesture 3.4s ease-in-out infinite; }
+  @keyframes gesture { 0%,100%{transform:rotate(0)} 30%{transform:rotate(-9deg) translateY(-6px)} 65%{transform:rotate(4deg)} }
+  @media (max-width: 900px) { main { grid-template-columns:1fr; height:auto; } .stage { height:60vh; } #log { height:40vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎙️ InterviewPilot · Live interview with Priya (HR)</h1>
+  <span id="status" class="pill">Ready</span>
+</header>
+<main>
+  <section class="stage" id="stage">
+    <svg id="avatar" viewBox="0 0 400 520" aria-label="Priya, HR interviewer">
+      <defs>
+        <linearGradient id="skin" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#e8b894"/><stop offset="1" stop-color="#d49c76"/></linearGradient>
+        <linearGradient id="hair" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2b1a14"/><stop offset="1" stop-color="#1a0f0b"/></linearGradient>
+        <linearGradient id="blazer" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#34407a"/><stop offset="1" stop-color="#252e5c"/></linearGradient>
+      </defs>
+      <path d="M60 520 C70 420 120 380 200 372 C280 380 330 420 340 520 Z" fill="url(#blazer)"/>
+      <path d="M165 378 L200 450 L235 378 Z" fill="#f4f1ec"/>
+      <rect x="178" y="320" width="44" height="62" rx="18" fill="url(#skin)"/>
+      <g id="hand">
+        <path d="M300 520 C300 485 296 462 286 446 C280 436 292 428 302 436 C316 448 322 470 324 520 Z" fill="url(#skin)"/>
+      </g>
+      <g id="head">
+        <path d="M102 210 C96 120 150 70 205 72 C268 74 312 126 302 220 C300 280 316 330 300 360 C270 340 262 300 262 300 L140 300 C140 300 132 342 100 362 C86 330 104 280 102 210 Z" fill="url(#hair)"/>
+        <ellipse cx="200" cy="205" rx="80" ry="102" fill="url(#skin)"/>
+        <ellipse cx="121" cy="212" rx="12" ry="20" fill="#d49c76"/>
+        <ellipse cx="279" cy="212" rx="12" ry="20" fill="#d49c76"/>
+        <circle cx="121" cy="236" r="4" fill="#e9c46a"/>
+        <circle cx="279" cy="236" r="4" fill="#e9c46a"/>
+        <path d="M120 170 C130 104 180 92 214 100 C252 108 276 134 282 170 C258 140 226 126 196 128 C162 130 136 146 120 170 Z" fill="url(#hair)"/>
+        <path d="M150 176 Q168 166 186 174" stroke="#2b1a14" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        <path d="M214 174 Q232 166 250 176" stroke="#2b1a14" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+        <ellipse cx="168" cy="198" rx="12" ry="8" fill="#fff"/>
+        <ellipse cx="232" cy="198" rx="12" ry="8" fill="#fff"/>
+        <circle id="pl" cx="168" cy="198" r="5.5" fill="#3a2418"/>
+        <circle id="pr" cx="232" cy="198" r="5.5" fill="#3a2418"/>
+        <g id="lids" fill="#d49c76">
+          <rect x="154" y="188" width="28" height="18" rx="8"/>
+          <rect x="218" y="188" width="28" height="18" rx="8"/>
+        </g>
+        <path d="M200 205 Q194 232 198 240 Q203 243 208 240" stroke="#b9805e" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <ellipse cx="150" cy="238" rx="13" ry="7" fill="#e79a8a" opacity=".35"/>
+        <ellipse cx="250" cy="238" rx="13" ry="7" fill="#e79a8a" opacity=".35"/>
+        <g transform="translate(200 266)">
+          <path id="mouth" d="M-24 0 Q0 6 24 0 Q0 8 -24 0 Z" fill="#a8424a"/>
+        </g>
+      </g>
+    </svg>
+    <div class="name">Priya · Senior HR Recruiter</div>
+    <video id="me" autoplay muted playsinline></video>
+    <div id="start">
+      <h2 style="margin:0">Your interview is ready</h2>
+      <p>Priya will talk with you about the role. Speak naturally — she stops when you start talking and replies when you pause. Use Chrome for best voice support.</p>
+      <button id="go">Join interview</button>
+    </div>
+  </section>
+  <section class="side">
+    <div id="log" aria-live="polite"></div>
+    <div id="live"></div>
+    <div class="row">
+      <input id="text" placeholder="Type instead of speaking (Enter to send)" autocomplete="off">
+      <button id="send" class="secondary">Send</button>
+    </div>
+    <div class="row">
+      <button id="mic" class="secondary">🎤 Mic on</button>
+      <button id="end" class="danger" style="flex:1">End interview &amp; get scorecard</button>
+    </div>
+  </section>
+</main>
+<script>
+const sid = location.pathname.split("/").filter(Boolean).pop();
+const api = (p) => `${location.pathname.replace(/\/$/, "")}/${p}`;
+const $ = (id) => document.getElementById(id);
+const stage = $("stage"), log = $("log"), live = $("live"), statusEl = $("status"), mouth = $("mouth");
+
+let voice = null, speaking = false, busy = false, micOn = true, ended = false;
+let rec = null, buffer = "", interimText = "", silenceTimer = null, currentUtterance = "";
+const PAUSE_MS = 2600;
+
+function setStatus(t, isLive) { statusEl.textContent = t; statusEl.classList.toggle("live", !!isLive); }
+function add(who, text) {
+  const p = document.createElement("p");
+  p.className = "msg" + (who === "me" ? " me" : "");
+  p.innerHTML = `<b>${who === "me" ? "You" : "Priya"}:</b> `;
+  p.appendChild(document.createTextNode(text));
+  log.appendChild(p); log.scrollTop = log.scrollHeight;
+}
+
+function pickVoice() {
+  const vs = speechSynthesis.getVoices();
+  const prefs = [/female|woman|samantha|zira|aria|jenny|google uk english female|veena|heera|karen|moira|tessa|serena/i];
+  voice = vs.find(v => /en-IN/i.test(v.lang) && prefs[0].test(v.name))
+       || vs.find(v => /en/i.test(v.lang) && prefs[0].test(v.name))
+       || vs.find(v => /en-IN/i.test(v.lang)) || vs.find(v => /en/i.test(v.lang)) || vs[0];
+}
+speechSynthesis.onvoiceschanged = pickVoice; pickVoice();
+
+const OPEN = ["M-24 0 Q0 6 24 0 Q0 8 -24 0 Z", "M-22 -2 Q0 4 22 -2 Q0 16 -22 -2 Z", "M-20 -3 Q0 2 20 -3 Q0 22 -20 -3 Z", "M-16 -2 Q0 1 16 -2 Q0 14 -16 -2 Z"];
+let mouthTimer = null;
+function mouthAnim(on) {
+  clearInterval(mouthTimer);
+  if (!on) { mouth.setAttribute("d", OPEN[0]); return; }
+  mouthTimer = setInterval(() => mouth.setAttribute("d", OPEN[1 + Math.floor(Math.random() * 3)]), 110);
+}
+function mode(m) { stage.classList.toggle("talking", m === "talk"); stage.classList.toggle("listening", m === "listen"); }
+
+function speak(text) {
+  return new Promise((resolve) => {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    if (voice) u.voice = voice;
+    u.rate = 1.0; u.pitch = 1.08;
+    currentUtterance = text.toLowerCase();
+    u.onstart = () => { speaking = true; mode("talk"); mouthAnim(true); setStatus("Priya is speaking", true); };
+    const done = () => { speaking = false; mouthAnim(false); mode("listen"); setStatus("Listening…", true); resolve(); };
+    u.onend = done; u.onerror = done;
+    speechSynthesis.speak(u);
+  });
+}
+
+function bargeIn() {
+  if (speaking) { speechSynthesis.cancel(); speaking = false; mouthAnim(false); mode("listen"); setStatus("Listening…", true); }
+}
+
+function looksLikeEcho(t) {
+  const words = t.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hits = words.filter(w => currentUtterance.includes(w)).length;
+  return hits / words.length > 0.7;
+}
+
+async function send(text) {
+  text = text.trim();
+  if (!text || busy || ended) return;
+  add("me", text); busy = true; setStatus("Priya is thinking…", true);
+  try {
+    const r = await fetch(api("turn"), { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ text }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.status);
+    add("hr", j.reply); busy = false; await speak(j.reply);
+    if (j.end) end(true);
+  } catch (e) {
+    busy = false; setStatus("Connection issue — try again", false);
+    add("hr", "Sorry, I lost you for a second. Could you say that again?");
+  }
+}
+
+function startRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { live.textContent = "Voice input isn't supported in this browser — type your answers below."; return; }
+  rec = new SR(); rec.lang = "en-IN"; rec.continuous = true; rec.interimResults = true;
+  rec.onresult = (ev) => {
+    let interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const t = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) { if (!(speaking && looksLikeEcho(t))) buffer += " " + t.trim(); }
+      else interim += t;
+    }
+    interimText = interim;
+    const heard = (buffer + " " + interim).trim();
+    if (speaking && interim.split(/\s+/).filter(Boolean).length >= 2 && !looksLikeEcho(interim)) bargeIn();
+    if (!speaking) live.textContent = heard ? "🗣️ " + heard : "";
+    clearTimeout(silenceTimer);
+    if (heard && !speaking) silenceTimer = setTimeout(() => { const t = (buffer + " " + interimText).trim(); buffer = ""; interimText = ""; live.textContent = ""; send(t); }, PAUSE_MS);
+  };
+  rec.onend = () => { if (micOn && !ended) setTimeout(() => { try { rec.start(); } catch (_) {} }, 150); };
+  rec.onerror = (e) => { if (e.error === "not-allowed") live.textContent = "Mic blocked — allow microphone access or type below."; };
+  try { rec.start(); } catch (_) {}
+}
+
+async function join() {
+  $("start").style.display = "none";
+  try { $("me").srcObject = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); } catch (_) { $("me").style.display = "none"; }
+  const s = await (await fetch(api("state"))).json();
+  s.turns.forEach(t => add(t.who === "hr" ? "hr" : "me", t.text));
+  if (s.done) { ended = true; setStatus("Interview finished"); return; }
+  startRecognition();
+  const last = s.turns[s.turns.length - 1];
+  if (last && last.who === "hr") await speak(last.text);
+}
+
+async function end(byPriya) {
+  if (ended) return;
+  ended = true; micOn = false; try { rec && rec.stop(); } catch (_) {}
+  speechSynthesis.cancel(); mouthAnim(false); mode(""); setStatus("Preparing your scorecard…", true);
+  ["send", "mic", "end"].forEach(id => $(id).disabled = true);
+  if (byPriya !== true) await speak("Thank you so much for your time today. I'm putting together your feedback now.");
+  try {
+    const j = await (await fetch(api("end"), { method:"POST" })).json();
+    const box = document.createElement("div"); box.id = "card";
+    box.innerHTML = "<h3>📋 Your scorecard</h3>"; box.appendChild(document.createTextNode(j.scorecard || "Scorecard unavailable — please try again."));
+    log.appendChild(box); log.scrollTop = log.scrollHeight;
+    setStatus("Done — back in ASI:One, type “result”", false);
+  } catch (_) { setStatus("Couldn't fetch scorecard — type “result” in ASI:One", false); }
+}
+
+$("go").onclick = join;
+$("end").onclick = () => end(false);
+$("send").onclick = () => { const t = $("text").value; $("text").value = ""; bargeIn(); send(t); };
+$("text").addEventListener("keydown", (e) => { if (e.key === "Enter") $("send").click(); });
+$("mic").onclick = () => {
+  micOn = !micOn; $("mic").textContent = micOn ? "🎤 Mic on" : "🔇 Mic off";
+  if (micOn) { try { rec && rec.start(); } catch (_) {} } else { try { rec && rec.stop(); } catch (_) {} }
+};
+setInterval(() => { stage.classList.add("blink"); setTimeout(() => stage.classList.remove("blink"), 140); }, 3800);
+document.addEventListener("mousemove", (e) => {
+  const dx = (e.clientX / innerWidth - .5) * 4, dy = (e.clientY / innerHeight - .5) * 3;
+  $("pl").setAttribute("cx", 168 + dx); $("pr").setAttribute("cx", 232 + dx);
+  $("pl").setAttribute("cy", 198 + dy); $("pr").setAttribute("cy", 198 + dy);
+});
+</script>
+</body>
+</html>
