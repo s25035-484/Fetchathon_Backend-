@@ -149,8 +149,7 @@ const $ = (id) => document.getElementById(id);
 const stage = $("stage"), log = $("log"), live = $("live"), statusEl = $("status"), mouth = $("mouth");
 
 let voice = null, speaking = false, busy = false, micOn = true, ended = false;
-let rec = null, buffer = "", interimText = "", silenceTimer = null, currentUtterance = "";
-const PAUSE_MS = 2600;
+let rec = null, buffer = "", interimText = "", currentUtterance = "";
 
 function setStatus(t, isLive) { statusEl.textContent = t; statusEl.classList.toggle("live", !!isLive); }
 function add(who, text) {
@@ -237,21 +236,21 @@ function startRecognition() {
     const heard = (buffer + " " + interim).trim();
     if (speaking && interim.split(/\s+/).filter(Boolean).length >= 2 && !looksLikeEcho(interim)) bargeIn();
     if (!speaking) live.textContent = heard ? "🗣️ " + heard : "";
-    clearTimeout(silenceTimer);
-    if (heard && !speaking) silenceTimer = setTimeout(() => { const t = (buffer + " " + interimText).trim(); buffer = ""; interimText = ""; live.textContent = ""; send(t); }, PAUSE_MS);
+    if (!speaking && !interim && buffer.trim()) { const t = buffer.trim(); buffer = ""; interimText = ""; live.textContent = ""; send(t); }
   };
-  rec.onend = () => { if (micOn && !ended) setTimeout(() => { try { rec.start(); } catch (_) {} }, 150); };
+  rec.onstart = () => { if (!speaking) setStatus("Listening…", true); };
+  rec.onend = () => { if (micOn && !ended) { try { rec.start(); } catch (_) {} } };
   rec.onerror = (e) => { if (e.error === "not-allowed") live.textContent = "Mic blocked — allow microphone access or type below."; };
   try { rec.start(); } catch (_) {}
 }
 
 async function join() {
   $("start").style.display = "none";
+  startRecognition();
   try { $("me").srcObject = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); } catch (_) { $("me").style.display = "none"; }
   const s = await (await fetch(api("state"))).json();
   s.turns.forEach(t => add(t.who === "hr" ? "hr" : "me", t.text));
-  if (s.done) { ended = true; setStatus("Interview finished"); return; }
-  startRecognition();
+  if (s.done) { ended = true; try { rec && rec.stop(); } catch (_) {} setStatus("Interview finished"); return; }
   const last = s.turns[s.turns.length - 1];
   if (last && last.who === "hr") await speak(last.text);
 }
