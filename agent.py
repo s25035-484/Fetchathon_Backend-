@@ -14,7 +14,8 @@ from uagents_core.contrib.protocols.chat import (
 )
 from uagents_core.contrib.protocols.chat import MetadataContent
 from uagents_core.contrib.protocols.chat.cards import (
-    CtaAction, DetailCardPayload, DetailSummaryRow, create_card_content, extract_card_response,
+    CarouselCardPayload, CarouselItem, CtaAction, DetailCardPayload, DetailSummaryRow,
+    ReviewCardPayload, ReviewSummaryRow, create_card_content, extract_card_response,
 )
 from uagents_core.contrib.protocols.payment import (
     CancelPayment, CommitPayment, CompletePayment, Funds, RejectPayment,
@@ -33,6 +34,11 @@ agent = Agent(
     mailbox=not os.environ.get("AGENT_ENDPOINT"),
     endpoint=[os.environ["AGENT_ENDPOINT"]] if os.environ.get("AGENT_ENDPOINT") else None,
     publish_agent_details=True,
+    handle_messages_concurrently=True,
+    description="Live AI HR interviewer: paste any job description and Priya interviews you for that exact role, "
+                "then returns a hiring scorecard and an optional paid Prep Pack.",
+    readme_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), "AGENT_README.md"),
+    metadata={"categories": ["career", "interview", "education", "hr"], "innovationlab": True, "hackathon": "fetchathon-3.0"},
 )
 chat = Protocol(spec=chat_protocol_spec)
 payments = Protocol(spec=payment_protocol_spec, role="seller")
@@ -84,7 +90,35 @@ def scorecard_card() -> DetailCardPayload:
     )
 
 
-CARD_ACTIONS = {"wrap_up": "I'd like to wrap up the interview now, please.", "prep_pack": "prep pack"}
+SAMPLE_JDS = {
+    "backend": ("Backend Engineer", "Backend Engineer (Python). 2+ years building REST APIs with Django or FastAPI, PostgreSQL, Redis caching, Docker and AWS. You will design scalable services, write tests and collaborate with product."),
+    "frontend": ("Frontend Developer", "Frontend Developer (React). 1+ year with React, TypeScript, REST APIs, responsive UI and Git. You will build user-facing features, ensure accessibility and work closely with designers."),
+    "analyst": ("Data Analyst", "Data Analyst. Strong SQL, Excel and Python (pandas), dashboards in Power BI or Tableau, basic statistics. You will turn business questions into analyses and present insights to stakeholders."),
+}
+
+
+def roles_card() -> CarouselCardPayload:
+    return CarouselCardPayload(
+        title="Quick start",
+        subtitle="Pick a sample role, or paste your own job description",
+        items=[CarouselItem(id=key, title=title, subtitle="Sample JD", secondary_text=jd[:90] + "…",
+                            primary_cta=CtaAction(label="Start interview", selection={"action": "sample", "role": key}, primary=True))
+               for key, (title, jd) in SAMPLE_JDS.items()],
+    )
+
+
+def checkout_card() -> ReviewCardPayload:
+    return ReviewCardPayload(
+        title="Confirm Prep Pack",
+        summary_rows=[ReviewSummaryRow(label="Item", value="InterviewPilot Prep Pack"),
+                      ReviewSummaryRow(label="Includes", value="STAR model answers, 8 likely questions, 7-day plan"),
+                      ReviewSummaryRow(label="Price", value=f"{PREP_PACK_PRICE} FET (Payment Protocol)")],
+        approve_cta=CtaAction(label=f"Pay {PREP_PACK_PRICE} FET", selection={"action": "confirm_pay"}, primary=True),
+        reject_cta=CtaAction(label="Not now", selection={"action": "cancel_pay"}),
+    )
+
+
+CARD_ACTIONS = {"wrap_up": "I'd like to wrap up the interview now, please."}
 
 
 def is_jd(text: str) -> bool:
@@ -139,7 +173,9 @@ async def handle_text(ctx: Context, sender: str, text: str) -> str:
         return f"📋 **Your scorecard**\n\n{card}{PREP_PACK_OFFER}", scorecard_card() if card else "Your interview is still running. Tell Priya you'd like to wrap up to get your scorecard."
 
     if low in {"prep pack", "prep-pack", "preppack", "buy prep pack", "unlock prep pack"}:
-        return await request_prep_pack(ctx, sender, state)
+        if not state.get("sid") or state.get("active"):
+            return await request_prep_pack(ctx, sender, state)
+        return "Here's your Prep Pack summary. Confirm to pay through the Fetch.ai Payment Protocol.", checkout_card()
 
     if low.startswith("interview"):
         jd = text.strip()[len("interview"):].strip(" :-\n")
@@ -169,6 +205,26 @@ async def handle_text(ctx: Context, sender: str, text: str) -> str:
     return HELP
 
 
+async def handle_card_action(ctx: Context, sender: str, action: str, selection: dict) -> None:
+    state = ctx.storage.get(sender) or {}
+    try:
+        if action == "sample" and selection.get("role") in SAMPLE_JDS:
+            await ctx.send(sender, reply("⏳ Priya is reading the job description and preparing your interview…"))
+            text, card = await start(ctx, sender, SAMPLE_JDS[selection["role"]][1])
+        elif action == "prep_pack":
+            text, card = "Here's your Prep Pack summary. Confirm to pay through the Fetch.ai Payment Protocol.", checkout_card()
+        elif action == "confirm_pay":
+            text, card = await request_prep_pack(ctx, sender, state), None
+        elif action == "cancel_pay":
+            text, card = "No problem. The Prep Pack stays available whenever you want it.", None
+        else:
+            return
+    except BackendError as e:
+        ctx.logger.error(str(e))
+        text, card = "⚠️ The interview service is busy right now. Please try again in a moment.", None
+    await ctx.send(sender, reply(text, card))
+
+
 @chat.on_message(ChatMessage)
 async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
     await ctx.send(sender, ChatAcknowledgement(
@@ -179,13 +235,19 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
             action = (response.selection or {}).get("action") if response and response.selection else None
             if action == "new":
                 ctx.storage.set(sender, {})
-                await ctx.send(sender, reply("Paste the next job description and Priya will start a fresh interview."))
+                await ctx.send(sender, reply("Paste the next job description, or pick a sample role.", roles_card()))
+                continue
+            if action in {"sample", "prep_pack", "confirm_pay", "cancel_pay"}:
+                await handle_card_action(ctx, sender, action, response.selection)
                 continue
             if action not in CARD_ACTIONS:
                 continue
             item = TextContent(text=CARD_ACTIONS[action])
         if isinstance(item, StartSessionContent):
             ctx.logger.info(f"session start {sender}")
+            has_text = any(isinstance(c, TextContent) for c in msg.content)
+            if not has_text and not (ctx.storage.get(sender) or {}).get("active"):
+                await ctx.send(sender, reply(HELP, roles_card()))
         elif isinstance(item, TextContent):
             text_in = MENTION.sub("", item.text).strip()
             state = ctx.storage.get(sender) or {}
@@ -196,6 +258,8 @@ async def on_chat(ctx: Context, sender: str, msg: ChatMessage):
                 card = None
                 if isinstance(text, tuple):
                     text, card = text
+                elif text == HELP:
+                    card = roles_card()
             except BackendError as e:
                 ctx.logger.error(str(e))
                 text, card = "⚠️ The interview service is busy right now. Please send your message again in a moment.", None
